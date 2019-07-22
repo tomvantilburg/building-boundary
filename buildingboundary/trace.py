@@ -15,7 +15,7 @@ from .components.alphashape import compute_alpha_shape
 from .components.boundingbox import compute_bounding_box
 from .components.segment import BoundarySegment
 from .components.segmentation import boundary_segmentation
-from .components.merge import merge_segments, merge_offset_lines
+from .components.merge import merge_offset_lines
 from .components.intersect import compute_intersections
 from .components.regularize import (get_primary_orientations,
                                     regularize_segments,
