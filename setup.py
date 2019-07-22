@@ -26,7 +26,9 @@ setup(
     install_requires=[
         'numpy',
         'scipy',
-        'shapely'
+        'shapely',
+        'cgal-bindings',
+        'scikit-image'
     ],
     zip_safe=False
 )
