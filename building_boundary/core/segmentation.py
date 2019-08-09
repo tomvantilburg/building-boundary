@@ -35,19 +35,28 @@ def ransac_line_segmentation(points, distance):
 
 def extend_segment(segment, points, indices, distance):
     line_segment = BoundarySegment(points[segment])
-    line_segment.fit_line(method='TLS')
 
     for i in range(segment[0]-1, indices[0]-1, -1):
         if line_segment.dist_point_line(points[i]) < distance:
             segment.insert(0, i)
         else:
-            break
+            if (i - 2 >= indices[0] and
+                    line_segment.dist_point_line(points[i-1]) < distance and
+                    line_segment.dist_point_line(points[i-2]) < distance):
+                segment.append(i)
+            else:
+                break
 
     for i in range(segment[-1]+1, indices[-1]+1):
         if line_segment.dist_point_line(points[i]) < distance:
             segment.append(i)
         else:
-            break
+            if (i + 2 <= indices[-1] and
+                    line_segment.dist_point_line(points[i+1]) < distance and
+                    line_segment.dist_point_line(points[i+2]) < distance):
+                segment.append(i)
+            else:
+                break
 
     return segment
 
@@ -61,6 +70,13 @@ def extract_segment(points, indices, distance):
 
     if len(segment) > 1:
         segment = extend_segment(segment, points, indices, distance)
+    elif len(segment) == 1:
+        if segment[0] + 1 in indices:
+            segment.append(segment[0] + 1)
+            segment = extend_segment(segment, points, indices, distance)
+        elif segment[0] - 1 in indices:
+            segment.insert(0, segment[0] - 1)
+            segment = extend_segment(segment, points, indices, distance)
 
     return segment
 

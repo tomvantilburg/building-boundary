@@ -7,8 +7,7 @@
 import math
 import numpy as np
 
-from ..utils.error import ThresholdError
-from ..utils.angle import min_angle_difference
+from .. import utils
 
 
 def PCA(points):
@@ -54,12 +53,22 @@ class BoundarySegment(object):
             X and Y coordinates of points.
         """
         self.points = points
+        self.fit_line()
 
     def slope(self):
         return -self.a / self.b
 
     def intercept(self):
         return -self.c / self.b
+
+    @property
+    def line(self):
+        return (self.a, self.b, self.c)
+
+    @line.setter
+    def line(self, line):
+        self.a, self.b, self.c = line
+        self._create_line_segment()
 
     def fit_line(self, method='TLS', max_error=None):
         """
@@ -125,10 +134,11 @@ class BoundarySegment(object):
                 raise NotImplementedError("Chosen method not available.")
 
             if max_error is not None:
-                residuals = self.residuals()
-                if residuals > max_error:
-                    raise ThresholdError("Could not fit a proper line. "
-                                         "Error: {}".format(residuals))
+                error = self.error()
+                if error > max_error:
+                    raise utils.error.ThresholdError(
+                        "Could not fit a proper line. Error: {}".format(error)
+                    )
 
         self._create_line_segment()
 
@@ -188,7 +198,7 @@ class BoundarySegment(object):
             self.length = math.hypot(dx, dy)
             self.orientation = math.atan2(dy, dx)
 
-    def residuals(self):
+    def error(self):
         """
         Computes the max distance between the points and the fitted
         line.
@@ -229,53 +239,9 @@ class BoundarySegment(object):
 
         .. [1] https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
         """
-        distance = (abs(self.a * point[0] + self.b * point[1] + self.c) /
-                    math.sqrt(self.a**2 + self.b**2))
-        return distance
-
-    def side_points_line(self):
-        """
-        Determines on which side the points lie from the line segment.
-
-        Attributes
-        ----------
-        sides : (1xN) array
-            The side each point lies from the line segment. `0` is on the line,
-            `1` is on one side, `-1` on the other.
-
-        .. [1] https://stackoverflow.com/questions/1560492/how-to-tell-whether-a-point-is-to-the-right-or-left-side-of-a-line  # noqa
-        """
-        sides = ((self.end_points[1, 0] - self.end_points[0, 0]) *
-                 (self.points[:, 1] - self.end_points[0, 1]) -
-                 (self.end_points[1, 1] - self.end_points[0, 1]) *
-                 (self.points[:, 0] - self.end_points[0, 0]))
-        self.sides = np.sign(sides)
-
-    def inflate(self, order='cw'):
-        """
-        Moves the line segments to the outer most point of the object.
-        """
-        self.dist_points_line()
-        self.side_points_line()
-
-        if order == 'cw':
-            outside_points = np.where(self.sides == 1)[0]
-        elif order == 'ccw':
-            outside_points = np.where(self.sides == -1)[0]
-        else:
-            raise ValueError('Invalid value for order.'
-                             'Must be either \'cw\' or \'ccw\'.')
-
-        if len(outside_points) == 0:
-            return
-
-        furthest_outside_point_idx = np.argmax(self.distances[outside_points])
-        furthest_point_idx = outside_points[furthest_outside_point_idx]
-        furthest_point = self.points[furthest_point_idx]
-        point_on_line = self._point_on_line(furthest_point)
-        dx, dy = furthest_point - point_on_line
-        self.c = self.c - self.a * dx - self.b * dy
-        self._create_line_segment()
+        dist = (abs(self.a * point[0] + self.b * point[1] + self.c) /
+                math.sqrt(self.a**2 + self.b**2))
+        return dist
 
     def target_orientation(self, primary_orientations):
         """
@@ -292,7 +258,7 @@ class BoundarySegment(object):
         The primary orientation closest to the orientation of this line
         segment.
         """
-        po_diff = [min_angle_difference(self.orientation, o) for
+        po_diff = [utils.angle.min_angle_difference(self.orientation, o) for
                    o in primary_orientations]
         min_po_diff = min(po_diff)
         return primary_orientations[po_diff.index(min_po_diff)]
@@ -341,13 +307,14 @@ class BoundarySegment(object):
                           len(self.points))
 
             if max_error is not None:
-                residuals = self.residuals()
-                if residuals > max_error:
+                error = self.error()
+                if error > max_error:
                     self.a = prev_a
                     self.b = prev_b
                     self.c = prev_c
-                    raise ThresholdError("Could not fit a proper line. "
-                                         "Error: {}".format(residuals))
+                    raise utils.error.ThresholdError(
+                        "Could not fit a proper line. Error: {}".format(error)
+                    )
 
             self._create_line_segment()
 
@@ -358,7 +325,7 @@ class BoundarySegment(object):
         Parameters
         ----------
         line : (1x3) array-like
-            The a,b, and c coefficients (ax + by + c = 0) of a line.
+            The a, b, and c coefficients (ax + by + c = 0) of a line.
 
         Returns
         -------
@@ -376,3 +343,19 @@ class BoundarySegment(object):
             return np.array([x, y])
         else:
             return np.array([])
+
+    def side_point_on_line(self, point):
+        a = self.end_points[0]
+        b = self.end_points[1]
+        c = point
+        if not np.isclose(np.cross(b-a, c-a), 0):
+            raise ValueError('Given point not on line.')
+        dist_ab = utils.geometry.distance(a, b)
+        dist_ac = utils.geometry.distance(a, c)
+        dist_bc = utils.geometry.distance(b, c)
+        if np.isclose(dist_ac + dist_bc, dist_ab):
+            return 0
+        elif dist_ac < dist_bc:
+            return 1
+        elif dist_bc < dist_ac:
+            return -1
