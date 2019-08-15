@@ -88,7 +88,10 @@ def get_segments_between_pivots(segments, pivots):
 
 def parallel_distance(segment1, segment2):
     intersect = perpedicular_line_intersect(segment1, segment2)
-    return utils.geometry.distance(segment1.end_points[1], intersect)
+    if len(intersect) > 0:
+        return utils.geometry.distance(segment1.end_points[1], intersect)
+    else:
+        return float('inf')
 
 
 def check_distance(segments, pivots, max_distance):
@@ -98,8 +101,8 @@ def check_distance(segments, pivots, max_distance):
     if len(too_far) > 0:
         too_far[-1] = 0 if too_far[-1] > len(segments) - 1 else too_far[-1]
         for x in too_far:
-            bisect.insort_left(pivots, x)
-        pivots = list(set(pivots))
+            if x not in pivots:
+                bisect.insort_left(pivots, x)
     return pivots
 
 
